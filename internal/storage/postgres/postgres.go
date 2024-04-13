@@ -192,7 +192,7 @@ func (storage *Storage) setupBannerTags(ctx context.Context, tran pgx.Tx, banner
 
 	rows, err := tran.Query(ctx, q, tagVals...)
 	tagIds, err := pgx.CollectRows(rows, pgx.RowToStructByName[tagIdsModel])
-	fmt.Println(tagIds)
+
 	if err != nil {
 		return fmt.Errorf("%s: %w", op, err)
 	}
