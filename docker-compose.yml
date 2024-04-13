@@ -1,0 +1,40 @@
+version: '3.9'
+
+services:
+  db:
+    image: postgres:15.4-alpine
+    container_name: storage
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - '5431:5432'
+    volumes:
+      - storage:/var/lib/postgresql/data
+    networks:
+      - bridge
+  redis:
+    container_name: "redis"
+    image: redis:alpine
+    command: redis-server /usr/local/etc/redis/redis.conf --requirepass redis_pass
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis.conf:/usr/local/etc/redis/redis.conf
+    networks:
+      - bridge
+
+  go:
+    container_name: "banner-service"
+    restart: always
+    build:
+      context: .
+    ports:
+      - "8080:8080"
+    networks:
+      - bridge
+volumes:
+  storage:
+
+networks:
+  bridge:
