@@ -19,7 +19,14 @@ type Config struct {
 	PostgresSSLMode  string `env:"POSTGRES_SSL_MODE"`
 	PostgresMaxConns string `env:"POSTGRES_MAX_POOL_CONNS"`
 
+	RedisHost string `env:"REDIS_HOST"`
+	RedisPort string `env:"REDIS_PORT"`
+	RedisPass string `env:"REDIS_PASS"`
+	RedisDb   int    `env:"REDIS_DB"`
+
 	LogLevel string `env:"LOG_LEVEL" env-default:"DEBUG"`
+
+	SecretKey string `env:"SECRET_KEY"`
 }
 
 func New() *Config {
