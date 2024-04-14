@@ -6,6 +6,7 @@ import (
 	"github.com/Memozir/BannerService/config"
 	"github.com/Memozir/BannerService/internal/cache/redis"
 	"github.com/Memozir/BannerService/internal/http-server/handlers/banner/create"
+	"github.com/Memozir/BannerService/internal/http-server/middlewares/auth"
 	"github.com/Memozir/BannerService/internal/storage/postgres"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
