@@ -81,8 +81,7 @@ func main() {
 	cache := redis.NewRedis(appConfig)
 	router := chi.NewRouter()
 
-	// TODO: Add logger middleware
-	// TODO: Add auth middleware
+	router.Use(middleware.RequestID)
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.URLFormat)
 
