@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/Masterminds/squirrel"
 	"github.com/Memozir/BannerService/config"
+	"github.com/Memozir/BannerService/internal/storage/models"
+	"github.com/Memozir/BannerService/internal/storage/postgres/queries"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"log/slog"
@@ -292,4 +294,73 @@ func (storage *Storage) CreateBanner(ctx context.Context, tagIds []int64, featur
 	}
 
 	return bannerId, nil
+}
+
+type Banner struct {
+	Content  string `db:"content"`
+	IsActive bool   `db:"is_active"`
+}
+
+func (storage *Storage) GetBanner(ctx context.Context, tagId string, featureId string) (string, bool, error) {
+	const op = "storage.postgres.GetBanner"
+
+	query := `
+		select b.content , b.is_active
+		from banner b
+				 inner join feature f on b.banner_feature = f.id
+		where f.feature_id = $1 and $2 in (
+			select tag_id
+			from banner_tag
+			where banner_id=b.id
+		)
+		order by created_at
+		limit 1
+	`
+
+	rows, err := storage.conn.Query(ctx, query, featureId, tagId)
+
+	if err != nil {
+		storage.log.Error(fmt.Sprintf("%s: %w", op))
+		return "", false, NewDbErr(QueryExecuteError)
+	}
+
+	banner, err := pgx.CollectRows(rows, pgx.RowToStructByName[Banner])
+
+	if err != nil {
+		storage.log.Error(fmt.Sprintf("%s: %w", op))
+		return "", false, NewDbErr(QueryExecuteError)
+	}
+
+	return banner[0].Content, banner[0].IsActive, nil
+}
+
+func (storage *Storage) GetAllBanners(
+	ctx context.Context, featureId string, tagId string, limit string, offset string,
+) ([]models.BannerFull, error) {
+	const op = "storage.postgres.GetAllBanners"
+	var query string
+
+	if len(featureId) == 0 && len(tagId) == 0 {
+		query = queries.QBannersAllFilters
+	} else if len(featureId) == 0 {
+		query = queries.QBannersTagIdFilter
+	} else {
+		query = queries.QBannersFeatureIdFilter
+	}
+
+	rows, err := storage.conn.Query(ctx, query, featureId, tagId, limit, offset)
+
+	if err != nil {
+		storage.log.Error(fmt.Sprintf("%s: %w", op))
+		return []models.BannerFull{}, NewDbErr(QueryExecuteError)
+	}
+
+	banners, err := pgx.CollectRows(rows, pgx.RowToStructByName[models.BannerFull])
+
+	if err != nil {
+		storage.log.Error(fmt.Sprintf("%s: %w", op))
+		return []models.BannerFull{}, NewDbErr(QueryExecuteError)
+	}
+
+	return banners, nil
 }

@@ -43,7 +43,21 @@ func main() {
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.URLFormat)
 
-	router.Post("/banner", create.New(logger, storage))
+	router.Route("/banner", func(router chi.Router) {
+		router.With(
+			auth.NewJWTAuthenticationAdminMiddleware(logger, appConfig),
+		).Post("/", create.New(logger, storage))
+
+		router.With(auth.NewJWTAuthenticationAdminMiddleware(
+			logger, appConfig),
+		).Get("/", get.NewAllBanners(storage, logger))
+	})
+
+	router.Route("/banner-user", func(router chi.Router) {
+		router.With(
+			auth.NewJWTAuthenticationMiddleware(logger, appConfig),
+		).Get("/", get.New(storage, cache, logger))
+	})
 
 	serverDone := make(chan os.Signal)
 	signal.Notify(serverDone, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
