@@ -20,6 +20,10 @@ func SetOk(rw http.ResponseWriter) {
 	rw.WriteHeader(http.StatusOK)
 }
 
+func SetDeleted(rw http.ResponseWriter) {
+	rw.WriteHeader(http.StatusNonAuthoritativeInfo)
+}
+
 func SetCreated(rw http.ResponseWriter) {
 	rw.WriteHeader(http.StatusCreated)
 }

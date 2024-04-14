@@ -6,7 +6,9 @@ import (
 	"github.com/Memozir/BannerService/config"
 	"github.com/Memozir/BannerService/internal/cache/redis"
 	"github.com/Memozir/BannerService/internal/http-server/handlers/banner/create"
+	"github.com/Memozir/BannerService/internal/http-server/handlers/banner/delete"
 	"github.com/Memozir/BannerService/internal/http-server/handlers/banner/get"
+	"github.com/Memozir/BannerService/internal/http-server/handlers/banner/update"
 	"github.com/Memozir/BannerService/internal/http-server/middlewares/auth"
 	"github.com/Memozir/BannerService/internal/storage/postgres"
 	"github.com/go-chi/chi"
@@ -99,6 +101,16 @@ func main() {
 		router.With(
 			auth.NewJWTAuthenticationMiddleware(logger, appConfig),
 		).Get("/", get.New(storage, cache, logger))
+	})
+
+	router.Route("/banner/{id}", func(router chi.Router) {
+		router.With(
+			auth.NewJWTAuthenticationAdminMiddleware(logger, appConfig),
+		).Patch("/", update.New(storage, logger))
+
+		router.With(
+			auth.NewJWTAuthenticationAdminMiddleware(logger, appConfig),
+		).Delete("/", delete.New(storage, logger))
 	})
 
 	serverDone := make(chan os.Signal)

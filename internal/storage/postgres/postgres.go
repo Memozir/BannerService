@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"log/slog"
+	"strconv"
 	"time"
 )
 
@@ -363,4 +364,193 @@ func (storage *Storage) GetAllBanners(
 	}
 
 	return banners, nil
+}
+
+func (storage *Storage) getBannerByFeatureTags(ctx context.Context, featureId int64, tagIds []int64) (int64, error) {
+	const op = "storage.postgres.getBannerByFeatureTags"
+
+	psql := squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
+	sql := psql.Select("b.id").From("banner b").InnerJoin("feature f on b.banner_feature = f.id")
+	sql = sql.InnerJoin("banner_tag bt on b.id = bt.banner_id")
+	sql = sql.InnerJoin("tag t on bt.tag_id = t.id")
+	sql = sql.Where("f.feature_id = ", featureId)
+
+	for _, tag := range tagIds {
+		sql = sql.Where("t.tag_id = ", tag)
+	}
+
+	query, args, err := sql.ToSql()
+
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", op, err)
+	}
+
+	var bannerId int64
+	err = storage.conn.QueryRow(ctx, query, args...).Scan(&bannerId)
+
+	if err != nil {
+		storage.log.Error(fmt.Sprintf("%s: %w", op))
+		return 0, NewDbErr(QueryExecuteError)
+	}
+
+	return bannerId, nil
+}
+
+func (storage *Storage) getBannerFeatureId(ctx context.Context, bannerId int64) (int64, error) {
+	const op = "storage.postgres.getBannerFeatureId"
+
+	query := `
+		select banner_feature
+		from banner
+		where id = $1
+	`
+
+	var featureId int64
+	err := storage.conn.QueryRow(ctx, query, bannerId).Scan(&featureId)
+	if err != nil {
+		storage.log.Error(err.Error(), slog.String("op", op))
+		return 0, NewDbErr(err.Error())
+	}
+
+	return featureId, nil
+}
+
+func (storage *Storage) UpdateBanner(
+	ctx context.Context, bannerId string, tagIds *[]int64, featureId *int64, content string, isActive bool) error {
+
+	const op = "storage.postgres.GetAllBanners"
+
+	bannerIdInt, err := strconv.Atoi(bannerId)
+
+	if err != nil {
+		storage.log.Error(err.Error(), slog.String("op", op))
+		return err
+	}
+
+	psql := squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
+	sql := psql.Update("banner")
+
+	if len(content) != 0 {
+		sql = sql.Set("content", content)
+	}
+
+	tran, err := storage.conn.Begin(ctx)
+
+	if err != nil {
+		tranErr := tran.Rollback(ctx)
+		if tranErr != nil {
+			storage.log.Error(fmt.Sprintf("%s: %w", op, err))
+			return NewDbErr(TranRollbackError)
+		}
+		storage.log.Error(fmt.Sprintf("%s: %w", op, err))
+		return NewDbErr(TranBeginError)
+	}
+
+	if featureId != nil && tagIds != nil {
+		valid, err := storage.validFeatureTags(ctx, *featureId, *tagIds)
+		if err != nil {
+			storage.log.Error(err.Error(), slog.String("op", op))
+			return NewDbErr(err.Error())
+		}
+
+		if valid {
+			err = storage.setupBannerTags(ctx, tran, int64(bannerIdInt), *tagIds)
+
+			if err != nil {
+				storage.log.Error(err.Error(), slog.String("op", op))
+				return NewDbErr(err.Error())
+			}
+		}
+
+		featurePk, err := storage.getFeature(ctx, *featureId)
+
+		if err != nil {
+			storage.log.Error(err.Error(), slog.String("op", op))
+			return NewDbErr(err.Error())
+		}
+
+		sql = sql.Set("banner_feature", featurePk)
+	} else if featureId != nil {
+		featurePk, err := storage.getFeature(ctx, *featureId)
+
+		if err != nil {
+			storage.log.Error(err.Error(), slog.String("op", op))
+			return NewDbErr(err.Error())
+		}
+
+		sql = sql.Set("banner_feature", featurePk)
+	} else if tagIds != nil {
+		updatedFeatureId, err := storage.getBannerFeatureId(ctx, int64(bannerIdInt))
+
+		if err != nil {
+			return err
+		}
+
+		valid, err := storage.validFeatureTags(ctx, updatedFeatureId, *tagIds)
+
+		if err != nil {
+			storage.log.Error(err.Error(), slog.String("op", op))
+			return NewDbErr(err.Error())
+		}
+
+		if valid {
+			err = storage.setupBannerTags(ctx, tran, int64(bannerIdInt), *tagIds)
+
+			if err != nil {
+				storage.log.Error(err.Error(), slog.String("op", op))
+				return NewDbErr(err.Error())
+			}
+		}
+	}
+
+	err = tran.Commit(ctx)
+
+	if err != nil {
+		tranErr := tran.Rollback(ctx)
+
+		if tranErr != nil {
+			return fmt.Errorf("%s: %w", op, err)
+		}
+		storage.log.Error(fmt.Sprintf("%s: %w", op))
+		return NewDbErr(TranCommitError)
+	}
+
+	sql = sql.Set("is_active", isActive)
+	sql = sql.Where("id", bannerId)
+	query, args, err := sql.ToSql()
+
+	if err != nil {
+		dbErrStr := fmt.Sprintf("%s: %w", op, err)
+		dbErr := NewDbErr(dbErrStr)
+		storage.log.Error(err.Error(), slog.String("op", op))
+		return dbErr
+	}
+
+	_, err = storage.conn.Exec(ctx, query, args...)
+
+	if err != nil {
+		dbErrStr := fmt.Sprintf("%s: %w", op, err)
+		dbErr := NewDbErr(dbErrStr)
+		storage.log.Error(err.Error(), slog.String("op", op))
+		return dbErr
+	}
+
+	return nil
+}
+
+func (storage *Storage) DeleteBanner(ctx context.Context, bannerId int64) error {
+	const op = "storage.postgres.DeleteBanner"
+
+	query := `
+		DELETE FROM banner WHERE id = $1
+	`
+
+	_, err := storage.conn.Exec(ctx, query, bannerId)
+
+	if err != nil {
+		storage.log.Error(err.Error(), slog.String("op", op))
+		return NewDbErr(err.Error())
+	}
+
+	return nil
 }
