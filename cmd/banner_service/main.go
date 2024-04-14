@@ -11,6 +11,7 @@ import (
 	"github.com/Memozir/BannerService/internal/storage/postgres"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
+	"github.com/golang-jwt/jwt/v5"
 	"log/slog"
 	"net/http"
 	"os"
@@ -24,10 +25,50 @@ const (
 	LogLevelDev   = "dev"
 )
 
+func getTestTokens(cfg *config.Config) (string, string) {
+	secretKey := []byte(cfg.SecretKey)
+	expTime := time.Now().Add(24 * 30 * time.Hour)
+
+	claimsAdmin := &auth.Claims{
+		Role: "admin",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expTime),
+		},
+	}
+
+	claimsUser := &auth.Claims{
+		Role: "user",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expTime),
+		},
+	}
+
+	tokenAdmin := jwt.NewWithClaims(jwt.SigningMethodHS256, claimsAdmin)
+	tokenStringAdmin, err := tokenAdmin.SignedString(secretKey)
+
+	if err != nil {
+		fmt.Println(err.Error())
+		return "", ""
+	}
+
+	tokenUser := jwt.NewWithClaims(jwt.SigningMethodHS256, claimsUser)
+	tokenStringUser, err := tokenUser.SignedString(secretKey)
+
+	if err != nil {
+		fmt.Println(err.Error())
+		return "", ""
+	}
+
+	return tokenStringAdmin, tokenStringUser
+}
+
 func main() {
 	appConfig := config.New()
 	logger := NewLogger(appConfig)
 	logger.Info("Debug", slog.String("logLevel", appConfig.LogLevel))
+
+	adminToken, userToken := getTestTokens(appConfig)
+	fmt.Printf("Admin token: %s\nUser token: %s\n", adminToken, userToken)
 
 	storage, err := postgres.NewDb(context.Background(), logger, appConfig)
 
