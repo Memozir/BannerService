@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/Memozir/BannerService/config"
+	"github.com/Memozir/BannerService/internal/cache/redis"
 	"github.com/Memozir/BannerService/internal/http-server/handlers/banner/create"
 	"github.com/Memozir/BannerService/internal/storage/postgres"
 	"github.com/go-chi/chi"
@@ -34,6 +35,7 @@ func main() {
 		logger.Info("successfully connected to postgres")
 	}
 
+	cache := redis.NewRedis(appConfig)
 	router := chi.NewRouter()
 
 	// TODO: Add logger middleware
