@@ -60,14 +60,14 @@ func New(storage BannerUpdater, log *slog.Logger) http.HandlerFunc {
 		)
 
 		if err != nil {
-			log.Error(err.Error(), slog.String("op", op))
-
 			if sErr, ok := err.(StorageError); ok {
+				log.Error(sErr.GetDbError(), slog.String("op", op))
 				respError := respHelper.Error(sErr.GetDbError())
 				respHelper.SetInternalServerError(rw)
 				render.JSON(rw, r, &respError)
 				return
 			}
+			log.Error(err.Error(), slog.String("op", op))
 			respHelper.SetNotFound(rw)
 			respError := respHelper.Error(respHelper.IncorrectDataMsg)
 			render.JSON(rw, r, &respError)
