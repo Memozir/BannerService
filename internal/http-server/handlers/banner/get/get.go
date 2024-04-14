@@ -59,6 +59,11 @@ func New(storage BannerGetter, cache *redis.RedisCache, log *slog.Logger) http.H
 			if err == nil {
 				var response json.RawMessage = []byte(banner)
 				err = json.NewEncoder(rw).Encode(&response)
+				if err != nil {
+					log.Error("encoding response from cache error", slog.String("op", op))
+					respHelper.SetInternalServerError(rw)
+					return
+				}
 			} else {
 				log.Error(err.Error(), slog.String("op", op))
 			}
