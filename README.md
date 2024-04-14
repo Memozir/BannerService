@@ -1,7 +1,7 @@
 # BannerService
 
 ## Инструкция по запуску
-### Поднятие контейнеров go, redis и субд Postgres:
+### Находясь в корне проекта выполнить:
 ```shell
 docker-compose up -d
 ```
