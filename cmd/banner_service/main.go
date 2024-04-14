@@ -10,10 +10,11 @@ import (
 	"github.com/Memozir/BannerService/internal/http-server/handlers/banner/get"
 	"github.com/Memozir/BannerService/internal/http-server/handlers/banner/update"
 	"github.com/Memozir/BannerService/internal/http-server/middlewares/auth"
+	content_type "github.com/Memozir/BannerService/internal/http-server/middlewares/content-type"
+	"github.com/Memozir/BannerService/internal/lib/api/random"
 	"github.com/Memozir/BannerService/internal/storage/postgres"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
-	"github.com/golang-jwt/jwt/v5"
 	"log/slog"
 	"net/http"
 	"os"
@@ -49,6 +50,7 @@ func main() {
 	router.Use(middleware.RequestID)
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.URLFormat)
+	router.Use(content_type.SetContentTypeApplicationJson)
 
 	router.Route("/banner", func(router chi.Router) {
 		router.With(
